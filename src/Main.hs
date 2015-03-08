@@ -20,8 +20,9 @@ data Confidence = Unknown
                 deriving (Read, Show, Ord, Eq, Enum, Bounded)
 
 confidenceMappings :: [(Int, Confidence)]
-confidenceMappings    = zip [0..] [(minBound :: Confidence)..]
-integerToConfidence i = case drop i [(minBound :: Confidence)..] of [] -> Nothing; (a:_) -> Just a
+confidenceMappings    = zip [0..] confidences
+confidences           = [(minBound :: Confidence)..]
+integerToConfidence i = case drop i confidences of [] -> Nothing; (a:_) -> Just a
 
 addOptions    = Add <$> argument auto (metavar "CONFIDENCE") <*> argument str (metavar "QUESTION") <*> argument str (metavar "ANSWER")
 removeOptions = Remove <$> argument auto (metavar "FACTID")
@@ -39,9 +40,25 @@ main = do
   database <- readFile dbPath
   execParser (info (helper <*> options) idm) >>= run (read database) >>= (writeFile dbPath . show)
 
+wordWrap maxLen paddings s = unlines $ map (\(p, l) -> p ++ l) $ zip paddings $ toLines "" (words s)
+  where toLines l []     = [l]
+        toLines l (w:ws) = if length l + length w > maxLen
+                             then l : toLines w ws
+                             else toLines (unwords [l, w]) ws
+
 run :: Database -> Command -> IO Database
 run db List = do
-  mapM_ print (dbFacts db)
+  let maxLen             = 1 + (maximum $ map (length . show) confidences)
+      spaces             = repeat ' '
+      linePadding        = take (maxLen + 4) spaces
+      paddedConfidence c = let len = length $ show c in show c ++ (take (maxLen - len) spaces)
+      questionPaddings   = "Q: " : repeat linePadding
+      answerPaddings     = (take maxLen spaces ++ "A: ") : repeat linePadding
+      factToLine f = concat [ paddedConfidence (factConfidence f)
+                            , (wordWrap 80 questionPaddings $ factQuestion f)
+                            , (wordWrap 80 answerPaddings $ factAnswer f)
+                            ]
+  mapM_ (putStr . factToLine) (dbFacts db)
   return db
 run db (Add c q a) = do
   case integerToConfidence c of
