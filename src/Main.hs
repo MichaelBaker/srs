@@ -1,4 +1,4 @@
-import Prelude hiding        (readFile)
+import Prelude hiding        (readFile, getLine)
 import Options.Applicative   (subparser, command, info, progDesc, argument, metavar, auto, str, execParser, helper, idm)
 import Control.Applicative   ((<$>), (<*>), pure)
 import Data.Monoid           ((<>))
@@ -6,9 +6,14 @@ import System.FilePath.Posix (joinPath)
 import System.Directory      (getHomeDirectory)
 import System.IO.Strict      (readFile)
 import Data.Time             (getCurrentTime, utctDay, toGregorian)
+import Data.List             (sortBy)
+import Data.Ord              (comparing)
+import Safe                  (readMay)
+import System.IO             (getLine)
 
 data Command    = Add    { addConfidence :: Int, addQuestion :: String, addAnswer :: String }
                 | Remove { removeFactId :: Int }
+                | Study  { studyAmount :: Int }
                 | List
                 deriving (Show)
 data Database   = Database { dbNextId :: Int, dbFacts :: [Fact] } deriving (Read, Show)
@@ -19,28 +24,31 @@ data Confidence = Unknown
                 | WellKnown
                 | Unforgettable
                 deriving (Read, Show, Ord, Eq, Enum, Bounded)
-data StudyDate  = StudyDate { studyYear :: Integer, studyMonth :: Int, studyDay :: Int } deriving (Read, Show)
+data StudyDate  = StudyDate { studyYear :: Integer, studyMonth :: Int, studyDay :: Int } deriving (Read, Show, Eq, Ord)
 
 confidenceMappings :: [(Int, Confidence)]
 confidenceMappings    = zip [0..] confidences
+maxConfidenceInt      = fst $ head $ reverse confidenceMappings
 confidences           = [(minBound :: Confidence)..]
 integerToConfidence i = case drop i confidences of [] -> Nothing; (a:_) -> Just a
 
 addOptions    = Add <$> argument auto (metavar "CONFIDENCE") <*> argument str (metavar "QUESTION") <*> argument str (metavar "ANSWER")
 removeOptions = Remove <$> argument auto (metavar "FACTID")
 listOptions   = pure List
+studyOptions  = Study <$> argument auto (metavar "MAXFACTS")
 
 options = subparser
         (  command "add"    (info addOptions    $ progDesc "Adds a fact to study")
         <> command "remove" (info removeOptions $ progDesc "Removes a fact from the database")
         <> command "list"   (info listOptions   $ progDesc "List all facts")
+        <> command "study"  (info studyOptions  $ progDesc "Study n facts for the day")
         )
 
 main = do
   home <- getHomeDirectory
   let dbPath = joinPath [home, ".srs-database"]
   database <- readFile dbPath
-  execParser (info (helper <*> options) idm) >>= run (read database) >>= (writeFile dbPath . show)
+  execParser (info (helper <*> options) idm) >>= run (read database) >>= (writeFile dbPath . show . sortFactsByStudyDate)
 
 wordWrap maxLen s = toLines "" (words s)
   where toLines l []     = [l]
@@ -66,9 +74,8 @@ run db List = do
 run db (Add c q a) = do
   case integerToConfidence c of
     Just c' -> do
-      t <- getCurrentTime
-      let (y, m, d) = toGregorian $ utctDay t
-      let newFact = Fact c' (StudyDate y m d) (dbNextId db) q a
+      studyDate <- todaysStudyDate
+      let newFact = Fact c' studyDate (dbNextId db) q a
       return db { dbNextId = dbNextId db + 1, dbFacts = newFact : dbFacts db }
     Nothing -> do
       putStrLn (show c ++ " is not a valid confidence level.")
@@ -77,3 +84,38 @@ run db (Add c q a) = do
 run db (Remove i) = do
   let newFacts = filter ((/= i) . factId) $ dbFacts db
   return db { dbFacts = newFacts }
+run db (Study maxFacts) = do
+  today    <- todaysStudyDate
+  newFacts <- studyFacts maxFacts today $ dbFacts db
+  return db { dbFacts = newFacts }
+
+studyFacts :: Int -> StudyDate -> [Fact] -> IO [Fact]
+studyFacts 0 _ fs = putStrLn "Nothing more for today B)" >> return fs
+studyFacts _ _ [] = putStrLn "There are no facts in your database" >> return []
+studyFacts n today (f:fs)
+  | factStudyDate f > today = putStrLn "Nothing more for today B)" >> return (f:fs)
+  | otherwise = do
+      putStrLn (factQuestion f)
+      c <- getChar
+      case c of _ -> return ()
+      putStrLn (factAnswer f)
+      confidence <- getConfidence
+      let f' = f { factConfidence = confidence }
+      studyFacts (n - 1) today (fs ++ [f'])
+
+getConfidence :: IO Confidence
+getConfidence = do
+  putStrLn $ "How well did you know that?(0-" ++ show maxConfidenceInt ++ ")"
+  c <- getLine
+  case readMay c of
+    Nothing -> putStrLn (show c ++ " is not a valid confidence level. Please enter an integer between 0 and " ++ show maxConfidenceInt) >> getConfidence
+    Just a  -> case integerToConfidence a of
+                 Nothing -> putStrLn (show c ++ " is not a valid confidence level. Please enter an integer between 0 and " ++ show maxConfidenceInt) >> getConfidence
+                 Just b  -> return b
+
+sortFactsByStudyDate db = db { dbFacts = sortBy (flip $ comparing factStudyDate) (dbFacts db) }
+
+todaysStudyDate = do
+  t <- getCurrentTime
+  let (y, m, d) = toGregorian $ utctDay t
+  return $ StudyDate y m d
