@@ -5,19 +5,21 @@ import Data.Monoid           ((<>))
 import System.FilePath.Posix (joinPath)
 import System.Directory      (getHomeDirectory)
 import System.IO.Strict      (readFile)
+import Data.Time             (getCurrentTime, utctDay, toGregorian)
 
 data Command    = Add    { addConfidence :: Int, addQuestion :: String, addAnswer :: String }
                 | Remove { removeFactId :: Int }
                 | List
                 deriving (Show)
 data Database   = Database { dbNextId :: Int, dbFacts :: [Fact] } deriving (Read, Show)
-data Fact       = Fact { factConfidence :: Confidence, factId :: Int, factQuestion :: String, factAnswer :: String } deriving (Read, Show)
+data Fact       = Fact { factConfidence :: Confidence, factStudyDate :: StudyDate, factId :: Int, factQuestion :: String, factAnswer :: String } deriving (Read, Show)
 data Confidence = Unknown
                 | LittleKnown
                 | Known
                 | WellKnown
                 | Unforgettable
                 deriving (Read, Show, Ord, Eq, Enum, Bounded)
+data StudyDate  = StudyDate { studyYear :: Integer, studyMonth :: Int, studyDay :: Int } deriving (Read, Show)
 
 confidenceMappings :: [(Int, Confidence)]
 confidenceMappings    = zip [0..] confidences
@@ -40,7 +42,7 @@ main = do
   database <- readFile dbPath
   execParser (info (helper <*> options) idm) >>= run (read database) >>= (writeFile dbPath . show)
 
-wordWrap maxLen paddings s = unlines $ map (\(p, l) -> p ++ l) $ zip paddings $ toLines "" (words s)
+wordWrap maxLen s = toLines "" (words s)
   where toLines l []     = [l]
         toLines l (w:ws) = if length l + length w > maxLen
                              then l : toLines w ws
@@ -50,20 +52,23 @@ run :: Database -> Command -> IO Database
 run db List = do
   let maxLen             = 1 + (maximum $ map (length . show) confidences)
       spaces             = repeat ' '
-      linePadding        = take (maxLen + 4) spaces
+      linePadding        = take maxLen spaces
       paddedConfidence c = let len = length $ show c in show c ++ (take (maxLen - len) spaces)
-      questionPaddings   = "Q: " : repeat linePadding
-      answerPaddings     = (take maxLen spaces ++ "A: ") : repeat linePadding
-      factToLine f = concat [ paddedConfidence (factConfidence f)
-                            , (wordWrap 80 questionPaddings $ factQuestion f)
-                            , (wordWrap 80 answerPaddings $ factAnswer f)
-                            ]
+      textLines f        = concat [(wordWrap 80 $ "Q: " ++ factQuestion f), (wordWrap 80 $ "A: " ++ factAnswer f)]
+      paddedTime t       = let timeString = concat [show $ studyYear t, "-", show $ studyMonth t, "-", show $ studyDay t] in timeString ++ take (maxLen - length timeString) spaces
+      finalLines f       = case textLines f of
+                             []         -> [paddedConfidence (factConfidence f), paddedTime (factStudyDate f)]
+                             (a:[])     -> [paddedConfidence (factConfidence f) ++ a, paddedTime (factStudyDate f)]
+                             (a:b:rest) -> [paddedConfidence (factConfidence f) ++ a, paddedTime (factStudyDate f) ++ b] ++ map (\r -> linePadding ++ r) rest
+      factToLine f = unlines $ finalLines f
   mapM_ (putStr . factToLine) (dbFacts db)
   return db
 run db (Add c q a) = do
   case integerToConfidence c of
     Just c' -> do
-      let newFact = Fact c' (dbNextId db) q a
+      t <- getCurrentTime
+      let (y, m, d) = toGregorian $ utctDay t
+      let newFact = Fact c' (StudyDate y m d) (dbNextId db) q a
       return db { dbNextId = dbNextId db + 1, dbFacts = newFact : dbFacts db }
     Nothing -> do
       putStrLn (show c ++ " is not a valid confidence level.")
