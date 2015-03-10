@@ -5,7 +5,7 @@ import Data.Monoid           ((<>))
 import System.FilePath.Posix (joinPath)
 import System.Directory      (getHomeDirectory)
 import System.IO.Strict      (readFile)
-import Data.Time             (getCurrentTime, utctDay, toGregorian)
+import Data.Time             (getCurrentTime, utctDay, toGregorian, fromGregorian, addDays)
 import Data.List             (sortBy)
 import Data.Ord              (comparing)
 import Safe                  (readMay)
@@ -13,7 +13,7 @@ import System.IO             (getLine)
 
 data Command    = Add    { addConfidence :: Int, addQuestion :: String, addAnswer :: String }
                 | Remove { removeFactId :: Int }
-                | Study  { studyAmount :: Int }
+                | Study
                 | List
                 deriving (Show)
 data Database   = Database { dbNextId :: Int, dbFacts :: [Fact] } deriving (Read, Show)
@@ -35,20 +35,21 @@ integerToConfidence i = case drop i confidences of [] -> Nothing; (a:_) -> Just 
 addOptions    = Add <$> argument auto (metavar "CONFIDENCE") <*> argument str (metavar "QUESTION") <*> argument str (metavar "ANSWER")
 removeOptions = Remove <$> argument auto (metavar "FACTID")
 listOptions   = pure List
-studyOptions  = Study <$> argument auto (metavar "MAXFACTS")
+studyOptions  = pure Study
 
 options = subparser
         (  command "add"    (info addOptions    $ progDesc "Adds a fact to study")
         <> command "remove" (info removeOptions $ progDesc "Removes a fact from the database")
         <> command "list"   (info listOptions   $ progDesc "List all facts")
-        <> command "study"  (info studyOptions  $ progDesc "Study n facts for the day")
+        <> command "study"  (info studyOptions  $ progDesc "Study todays facts")
         )
 
 main = do
   home <- getHomeDirectory
   let dbPath = joinPath [home, ".srs-database"]
   database <- readFile dbPath
-  execParser (info (helper <*> options) idm) >>= run (read database) >>= (writeFile dbPath . show . sortFactsByStudyDate)
+  newDb    <- execParser (info (helper <*> options) idm) >>= run (read database)
+  writeFile dbPath $ show $ newDb { dbFacts = schedule (dbFacts newDb) }
 
 wordWrap maxLen s = toLines "" (words s)
   where toLines l []     = [l]
@@ -84,9 +85,11 @@ run db (Add c q a) = do
 run db (Remove i) = do
   let newFacts = filter ((/= i) . factId) $ dbFacts db
   return db { dbFacts = newFacts }
-run db (Study maxFacts) = do
-  today    <- todaysStudyDate
-  newFacts <- studyFacts maxFacts today $ dbFacts db
+run db Study = do
+  today <- todaysStudyDate
+  let factsToStudy = takeWhile (\f -> factStudyDate f <= today) $ dbFacts db
+      numFacts     = min (length factsToStudy) 10
+  newFacts <- studyFacts numFacts today $ dbFacts db
   return db { dbFacts = newFacts }
 
 studyFacts :: Int -> StudyDate -> [Fact] -> IO [Fact]
@@ -100,8 +103,14 @@ studyFacts n today (f:fs)
       case c of _ -> return ()
       putStrLn (factAnswer f)
       confidence <- getConfidence
-      let f' = f { factConfidence = confidence }
+      let f' = f { factConfidence = confidence, factStudyDate = nextRepitition today confidence }
       studyFacts (n - 1) today (fs ++ [f'])
+
+nextRepitition today Unknown       = incDate today 1
+nextRepitition today LittleKnown   = incDate today 3
+nextRepitition today Known         = incDate today 7
+nextRepitition today WellKnown     = incDate today 14
+nextRepitition today Unforgettable = incDate today 30
 
 getConfidence :: IO Confidence
 getConfidence = do
@@ -113,9 +122,18 @@ getConfidence = do
                  Nothing -> putStrLn (show c ++ " is not a valid confidence level. Please enter an integer between 0 and " ++ show maxConfidenceInt) >> getConfidence
                  Just b  -> return b
 
-sortFactsByStudyDate db = db { dbFacts = sortBy (flip $ comparing factStudyDate) (dbFacts db) }
-
 todaysStudyDate = do
   t <- getCurrentTime
   let (y, m, d) = toGregorian $ utctDay t
   return $ StudyDate y m d
+
+schedule []     = []
+schedule (f:fs) = shuffle facts (factStudyDate f) [] []
+  where facts = sortBy (comparing factStudyDate) (f:fs)
+        shuffle [] _ result working = result ++ working
+        shuffle (a:as) date result working
+          | length working == 9    = shuffle as (incDate (factStudyDate a) 1) (result ++ working ++ [a]) []
+          | factStudyDate a < date = shuffle as date result (working ++ [a { factStudyDate = date }])
+          | otherwise              = shuffle as date result (working ++ [a])
+
+incDate (StudyDate y m d) days = let (y', m', d') = toGregorian $ addDays days $ fromGregorian y m d in StudyDate y' m' d'
