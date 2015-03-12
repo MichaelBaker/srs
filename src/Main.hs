@@ -5,7 +5,7 @@ import Data.Monoid           ((<>))
 import System.FilePath.Posix (joinPath)
 import System.Directory      (getHomeDirectory)
 import System.IO.Strict      (readFile)
-import Data.Time             (getCurrentTime, utctDay, toGregorian, fromGregorian, addDays)
+import Data.Time             (getZonedTime, localDay, zonedTimeToLocalTime, toGregorian, fromGregorian, addDays)
 import Data.List             (sortBy)
 import Data.Ord              (comparing)
 import Safe                  (readMay)
@@ -123,8 +123,8 @@ getConfidence = do
                  Just b  -> return b
 
 todaysStudyDate = do
-  t <- getCurrentTime
-  let (y, m, d) = toGregorian $ utctDay t
+  t <- getZonedTime
+  let (y, m, d) = toGregorian $ localDay $ zonedTimeToLocalTime t
   return $ StudyDate y m d
 
 schedule []     = []
