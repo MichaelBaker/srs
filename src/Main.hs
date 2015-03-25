@@ -16,7 +16,7 @@ data Command    = Add    { addConfidence :: Int, addQuestion :: String, addAnswe
                 | Study
                 | List
                 deriving (Show)
-data Database   = Database { dbNextId :: Int, dbFacts :: [Fact] } deriving (Read, Show)
+data Database   = Database { dbNextId :: Int, dbFacts :: [Fact], dbFinished :: [Fact] } deriving (Read, Show)
 data Fact       = Fact { factConfidence :: Confidence, factStudyDate :: StudyDate, factId :: Int, factQuestion :: String, factAnswer :: String } deriving (Read, Show)
 data Confidence = Unknown
                 | LittleKnown
@@ -89,22 +89,23 @@ run db Study = do
   today <- todaysStudyDate
   let factsToStudy = takeWhile (\f -> factStudyDate f <= today) $ dbFacts db
       numFacts     = min (length factsToStudy) 10
-  newFacts <- studyFacts numFacts today $ dbFacts db
-  return db { dbFacts = newFacts }
+  (newFacts, done) <- studyFacts numFacts today (dbFinished db) (dbFacts db)
+  return db { dbFacts = newFacts, dbFinished = done }
 
-studyFacts :: Int -> StudyDate -> [Fact] -> IO [Fact]
-studyFacts 0 _ fs = putStrLn "Nothing more for today B)" >> return fs
-studyFacts _ _ [] = putStrLn "There are no facts in your database" >> return []
-studyFacts n today (f:fs)
-  | factStudyDate f > today = putStrLn "Nothing more for today B)" >> return (f:fs)
+studyFacts :: Int -> StudyDate -> [Fact] -> [Fact] -> IO ([Fact], [Fact])
+studyFacts 0 _ ds fs = putStrLn "Nothing more for today B)" >> return (fs, ds)
+studyFacts _ _ _ [] = putStrLn "There are no facts in your database" >> return ([], [])
+studyFacts n today ds (f:fs)
+  | factStudyDate f > today = putStrLn "Nothing more for today B)" >> return (ds, (f:fs))
   | otherwise = do
       putStrLn (factQuestion f)
       c <- getChar
       case c of _ -> return ()
       putStrLn (factAnswer f)
       confidence <- getConfidence
-      let f' = f { factConfidence = confidence, factStudyDate = nextRepitition today confidence }
-      studyFacts (n - 1) today (fs ++ [f'])
+      if confidence == Unforgettable && factConfidence f == Unforgettable
+        then studyFacts (n - 1) today (f:ds) fs
+        else let f' = f { factConfidence = confidence, factStudyDate = nextRepitition today confidence } in studyFacts (n - 1) today ds (fs ++ [f'])
 
 nextRepitition today Unknown       = incDate today 1
 nextRepitition today LittleKnown   = incDate today 3
