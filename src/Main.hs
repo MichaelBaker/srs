@@ -59,18 +59,18 @@ wordWrap maxLen s = toLines "" (words s)
 
 run :: Database -> Command -> IO Database
 run db List = do
-  let maxLen             = 1 + (maximum $ map (length . show) confidences)
-      spaces             = repeat ' '
-      linePadding        = take maxLen spaces
-      paddedConfidence c = let len = length $ show c in show c ++ (take (maxLen - len) spaces)
-      textLines f        = concat [(wordWrap 80 $ "Q: " ++ factQuestion f), (wordWrap 80 $ "A: " ++ factAnswer f)]
-      paddedTime t       = let timeString = concat [show $ studyYear t, "-", show $ studyMonth t, "-", show $ studyDay t] in timeString ++ take (maxLen - length timeString) spaces
-      finalLines f       = case textLines f of
-                             []         -> [paddedConfidence (factConfidence f), paddedTime (factStudyDate f)]
-                             (a:[])     -> [paddedConfidence (factConfidence f) ++ a, paddedTime (factStudyDate f)]
-                             (a:b:rest) -> [paddedConfidence (factConfidence f) ++ a, paddedTime (factStudyDate f) ++ b] ++ map (\r -> linePadding ++ r) rest
+  let maxLen               = 5 + (maximum $ map (length . show) confidences)
+      spaces               = repeat ' '
+      linePadding          = take maxLen spaces
+      textLines f          = concat [(wordWrap 80 $ "Q: " ++ factQuestion f), (wordWrap 80 $ "A: " ++ factAnswer f)]
+      paddedConfidence c i = let s = show i ++ ": " ++ show c in s ++ (take (maxLen - (length s)) spaces)
+      paddedTime t         = let timeString = concat [show $ studyYear t, "-", show $ studyMonth t, "-", show $ studyDay t] in timeString ++ take (maxLen - length timeString) spaces
+      finalLines f         = case textLines f of
+                               []         -> [paddedConfidence (factConfidence f) (factId f), paddedTime (factStudyDate f)]
+                               (a:[])     -> [paddedConfidence (factConfidence f) (factId f) ++ a, paddedTime (factStudyDate f)]
+                               (a:b:rest) -> [paddedConfidence (factConfidence f) (factId f) ++ a, paddedTime (factStudyDate f) ++ b] ++ map (\r -> linePadding ++ r) rest
       factToLine f = unlines $ finalLines f
-  mapM_ (putStr . factToLine) (dbFacts db)
+  mapM_ (putStr . (++ "\n") . factToLine) (dbFacts db)
   return db
 run db (Add c q a) = do
   case integerToConfidence c of
