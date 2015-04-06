@@ -6,8 +6,6 @@ import System.FilePath.Posix (joinPath)
 import System.Directory      (getHomeDirectory)
 import System.IO.Strict      (readFile)
 import Data.Time             (getZonedTime, localDay, zonedTimeToLocalTime, toGregorian, fromGregorian, addDays)
-import Data.List             (sortBy)
-import Data.Ord              (comparing)
 import Safe                  (readMay)
 import System.IO             (getLine)
 
@@ -49,7 +47,7 @@ main = do
   let dbPath = joinPath [home, ".srs-database"]
   database <- readFile dbPath
   newDb    <- execParser (info (helper <*> options) idm) >>= run (read database)
-  writeFile dbPath $ show $ newDb { dbFacts = schedule (dbFacts newDb) }
+  writeFile dbPath $ show $ newDb
 
 wordWrap maxLen s = toLines "" (words s)
   where toLines l []     = [l]
@@ -127,14 +125,5 @@ todaysStudyDate = do
   t <- getZonedTime
   let (y, m, d) = toGregorian $ localDay $ zonedTimeToLocalTime t
   return $ StudyDate y m d
-
-schedule []     = []
-schedule (f:fs) = shuffle facts (factStudyDate f) [] []
-  where facts = sortBy (comparing factStudyDate) (f:fs)
-        shuffle [] _ result working = result ++ working
-        shuffle (a:as) date result working
-          | length working == 9    = shuffle as (incDate (factStudyDate a) 1) (result ++ working ++ [a]) []
-          | factStudyDate a < date = shuffle as date result (working ++ [a { factStudyDate = date }])
-          | otherwise              = shuffle as date result (working ++ [a])
 
 incDate (StudyDate y m d) days = let (y', m', d') = toGregorian $ addDays days $ fromGregorian y m d in StudyDate y' m' d'
