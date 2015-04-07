@@ -101,9 +101,14 @@ studyFacts n today ds (f:fs)
       case c of _ -> return ()
       putStrLn (factAnswer f)
       confidence <- getConfidence
-      if confidence == Unforgettable && factConfidence f == Unforgettable
+      let nextConfidence = incrementConfidence confidence (factConfidence f)
+      if nextConfidence == Unforgettable && factConfidence f == Unforgettable
         then studyFacts (n - 1) today (f:ds) fs
-        else let f' = f { factConfidence = confidence, factStudyDate = nextRepitition today confidence } in studyFacts (n - 1) today ds (fs ++ [f'])
+        else let f' = f { factConfidence = nextConfidence, factStudyDate = nextRepitition today nextConfidence } in studyFacts (n - 1) today ds (fs ++ [f'])
+
+incrementConfidence Unforgettable Unforgettable = Unforgettable
+incrementConfidence newC oldC | newC >= oldC = succ oldC
+                              | otherwise    = newC
 
 nextRepitition today Unknown       = incDate today 1
 nextRepitition today LittleKnown   = incDate today 3
