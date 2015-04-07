@@ -8,6 +8,7 @@ import System.IO.Strict      (readFile)
 import Data.Time             (getZonedTime, localDay, zonedTimeToLocalTime, toGregorian, fromGregorian, addDays)
 import Safe                  (readMay)
 import System.IO             (getLine)
+import Data.List             (sortBy)
 
 data Command    = Add    { addConfidence :: Int, addQuestion :: String, addAnswer :: String }
                 | Remove { removeFactId :: Int }
@@ -47,7 +48,7 @@ main = do
   let dbPath = joinPath [home, ".srs-database"]
   database <- readFile dbPath
   newDb    <- execParser (info (helper <*> options) idm) >>= run (read database)
-  writeFile dbPath $ show $ newDb
+  writeFile dbPath $ show $ sortFacts newDb
 
 wordWrap maxLen s = toLines "" (words s)
   where toLines l []     = [l]
@@ -132,3 +133,7 @@ todaysStudyDate = do
   return $ StudyDate y m d
 
 incDate (StudyDate y m d) days = let (y', m', d') = toGregorian $ addDays days $ fromGregorian y m d in StudyDate y' m' d'
+
+sortFacts db = db { dbFacts = newFacts }
+  where newFacts = sortBy (\a b -> compare (chronological $ factStudyDate a) (chronological $ factStudyDate b)) $ dbFacts db
+        chronological (StudyDate y m d) = (y, m, d)
