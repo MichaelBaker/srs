@@ -8,7 +8,8 @@ import System.IO.Strict      (readFile)
 import Data.Time             (getZonedTime, localDay, zonedTimeToLocalTime, toGregorian, fromGregorian, addDays)
 import Safe                  (readMay)
 import System.IO             (getLine)
-import Data.List             (sortBy)
+import Data.List             (sortBy, intercalate)
+import Display               (showColumns)
 
 data Command    = Add    { addConfidence :: Int, addQuestion :: String, addAnswer :: String }
                 | Remove { removeFactId :: Int }
@@ -58,18 +59,9 @@ wordWrap maxLen s = toLines "" (words s)
 
 run :: Database -> Command -> IO Database
 run db List = do
-  let maxLen               = 5 + (maximum $ map (length . show) confidences)
-      spaces               = repeat ' '
-      linePadding          = take maxLen spaces
-      textLines f          = concat [(wordWrap 80 $ "Q: " ++ factQuestion f), (wordWrap 80 $ "A: " ++ factAnswer f)]
-      paddedConfidence c i = let s = show i ++ ": " ++ show c in s ++ (take (maxLen - (length s)) spaces)
-      paddedTime t         = let timeString = concat [show $ studyYear t, "-", show $ studyMonth t, "-", show $ studyDay t] in timeString ++ take (maxLen - length timeString) spaces
-      finalLines f         = case textLines f of
-                               []         -> [paddedConfidence (factConfidence f) (factId f), paddedTime (factStudyDate f)]
-                               (a:[])     -> [paddedConfidence (factConfidence f) (factId f) ++ a, paddedTime (factStudyDate f)]
-                               (a:b:rest) -> [paddedConfidence (factConfidence f) (factId f) ++ a, paddedTime (factStudyDate f) ++ b] ++ map (\r -> linePadding ++ r) rest
-      factToLine f = unlines $ finalLines f
-  mapM_ (putStr . (++ "\n") . factToLine) (dbFacts db)
+  let factData f = ([show (factId f) ++ "  " ++ show (factConfidence f), timeString (factStudyDate f)], ["|Q| " ++ factQuestion f, "|A| " ++ factAnswer f])
+      timeString (StudyDate y m d) = concat [show y, "-", show m, "-", show d]
+  putStrLn $ intercalate "\n\n" $ map (showColumns 19 60 . factData) (dbFacts db)
   return db
 run db (Add c q a) = do
   case integerToConfidence c of
