@@ -17,20 +17,8 @@ data Command    = Add    { addConfidence :: Int, addQuestion :: String, addAnswe
                 | List
                 deriving (Show)
 data Database   = Database { dbNextId :: Int, dbFacts :: [Fact], dbFinished :: [Fact] } deriving (Read, Show)
-data Fact       = Fact { factConfidence :: Confidence, factStudyDate :: StudyDate, factId :: Int, factQuestion :: String, factAnswer :: String } deriving (Read, Show)
-data Confidence = Unknown
-                | LittleKnown
-                | Known
-                | WellKnown
-                | Unforgettable
-                deriving (Read, Show, Ord, Eq, Enum, Bounded)
+data Fact       = Fact { factConfidence :: Int, factStudyDate :: StudyDate, factId :: Int, factQuestion :: String, factAnswer :: String } deriving (Read, Show)
 data StudyDate  = StudyDate { studyYear :: Integer, studyMonth :: Int, studyDay :: Int } deriving (Read, Show, Eq, Ord)
-
-confidenceMappings :: [(Int, Confidence)]
-confidenceMappings    = zip [0..] confidences
-maxConfidenceInt      = fst $ head $ reverse confidenceMappings
-confidences           = [(minBound :: Confidence)..]
-integerToConfidence i = case drop i confidences of [] -> Nothing; (a:_) -> Just a
 
 addOptions    = Add <$> argument auto (metavar "CONFIDENCE") <*> argument str (metavar "QUESTION") <*> argument str (metavar "ANSWER")
 removeOptions = Remove <$> argument auto (metavar "FACTID")
@@ -64,14 +52,13 @@ run db List = do
   putStrLn $ intercalate "\n\n" $ map (showColumns 19 60 . factData) (dbFacts db)
   return db
 run db (Add c q a) = do
-  case integerToConfidence c of
-    Just c' -> do
+  if c >= minConfidence && c <= maxConfidence
+     then do
       studyDate <- todaysStudyDate
-      let newFact = Fact c' studyDate (dbNextId db) q a
+      let newFact = Fact c studyDate (dbNextId db) q a
       return db { dbNextId = dbNextId db + 1, dbFacts = newFact : dbFacts db }
-    Nothing -> do
-      putStrLn (show c ++ " is not a valid confidence level.")
-      mapM_ (\(i, x) -> putStrLn $ show i ++ " | " ++ show x) confidenceMappings
+    else do
+      putStrLn (show c ++ " is not a valid confidence level. Please choose a positive integer between 1 and 5")
       return db
 run db (Remove i) = do
   let newFacts = filter ((/= i) . factId) $ dbFacts db
@@ -95,29 +82,23 @@ studyFacts n today ds (f:fs)
       putStrLn (factAnswer f)
       confidence <- getConfidence
       let nextConfidence = incrementConfidence confidence (factConfidence f)
-      if nextConfidence == Unforgettable && factConfidence f == Unforgettable
+      if nextConfidence == maxConfidence && factConfidence f == maxConfidence
         then studyFacts (n - 1) today (f:ds) fs
         else let f' = f { factConfidence = nextConfidence, factStudyDate = nextRepitition today nextConfidence } in studyFacts (n - 1) today ds (fs ++ [f'])
 
-incrementConfidence Unforgettable Unforgettable = Unforgettable
-incrementConfidence newC oldC | newC >= oldC = succ oldC
-                              | otherwise    = newC
+incrementConfidence new old = if new > old then old + 1 else new
 
-nextRepitition today Unknown       = incDate today 1
-nextRepitition today LittleKnown   = incDate today 3
-nextRepitition today Known         = incDate today 7
-nextRepitition today WellKnown     = incDate today 14
-nextRepitition today Unforgettable = incDate today 30
+nextRepitition today n = incDate today (2 ^ n)
 
-getConfidence :: IO Confidence
+getConfidence :: IO Int
 getConfidence = do
-  putStrLn $ "How well did you know that?(0-" ++ show maxConfidenceInt ++ ")"
+  putStrLn $ "How well did you know that?(" ++ show minConfidence ++ "-" ++ show maxConfidence ++ ")"
   c <- getLine
   case readMay c of
-    Nothing -> putStrLn (show c ++ " is not a valid confidence level. Please enter an integer between 0 and " ++ show maxConfidenceInt) >> getConfidence
-    Just a  -> case integerToConfidence a of
-                 Nothing -> putStrLn (show c ++ " is not a valid confidence level. Please enter an integer between 0 and " ++ show maxConfidenceInt) >> getConfidence
-                 Just b  -> return b
+   Nothing -> putStrLn (show c ++ " is not a valid confidence level. Please enter an integer between " ++ show minConfidence ++ " and " ++ show maxConfidence) >> getConfidence
+   Just a  -> if a >= minConfidence && a <= maxConfidence
+                then return a
+                else putStrLn (show a ++ " is not a valid confidence level. Please enter an integer between " ++ show minConfidence ++ " and " ++ show maxConfidence) >> getConfidence
 
 todaysStudyDate = do
   t <- getZonedTime
@@ -129,3 +110,6 @@ incDate (StudyDate y m d) days = let (y', m', d') = toGregorian $ addDays days $
 sortFacts db = db { dbFacts = newFacts }
   where newFacts = sortBy (\a b -> compare (chronological $ factStudyDate a) (chronological $ factStudyDate b)) $ dbFacts db
         chronological (StudyDate y m d) = (y, m, d)
+
+maxConfidence = 5
+minConfidence = 1
