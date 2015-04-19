@@ -56,7 +56,7 @@ run db (Add c q a) = do
      then do
       studyDate <- todaysStudyDate
       let newFact = Fact c studyDate (dbNextId db) q a
-      return db { dbNextId = dbNextId db + 1, dbFacts = newFact : dbFacts db }
+      return db { dbNextId = dbNextId db + 1, dbFacts = dbFacts db ++ [newFact] }
     else do
       putStrLn (show c ++ " is not a valid confidence level. Please choose a positive integer between 1 and 5")
       return db
@@ -72,14 +72,15 @@ run db Study = do
 
 studyFacts :: Int -> StudyDate -> [Fact] -> [Fact] -> IO ([Fact], [Fact])
 studyFacts 0 _ ds fs = putStrLn "Nothing more for today B)" >> return (fs, ds)
-studyFacts _ _ _ [] = putStrLn "There are no facts in your database" >> return ([], [])
+studyFacts _ _ ds [] = putStrLn "There are no facts in your database" >> return ([], ds)
 studyFacts n today ds (f:fs)
-  | factStudyDate f > today = putStrLn "Nothing more for today B)" >> return (ds, (f:fs))
+  | factStudyDate f > today = putStrLn "Nothing more for today B)" >> return ((f:fs), ds)
   | otherwise = do
       putStrLn (factQuestion f)
       c <- getChar
       case c of _ -> return ()
       putStrLn (factAnswer f)
+      putStrLn ""
       confidence <- getConfidence
       let nextConfidence = incrementConfidence confidence (factConfidence f)
       if nextConfidence == maxConfidence && factConfidence f == maxConfidence
