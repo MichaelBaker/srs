@@ -114,7 +114,7 @@ incDate (StudyDate y m d) days = let (y', m', d') = toGregorian $ addDays days $
 
 sortFacts db = db { dbFacts = newFacts }
   where newFacts = sortBy (\a b -> compare (chronological (factStudyDate a) (factId a)) (chronological (factStudyDate b) (factId b))) $ dbFacts db
-        chronological (StudyDate y m d) n = (y, m, d, (1.0 :: Double) / (realToFrac n + 1.0))
+        chronological (StudyDate y m d) n = (y, m, d, n)
 
 maxConfidence = 5
 minConfidence = 1
