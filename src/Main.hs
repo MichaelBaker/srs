@@ -109,8 +109,8 @@ todaysStudyDate = do
 incDate (StudyDate y m d) days = let (y', m', d') = toGregorian $ addDays days $ fromGregorian y m d in StudyDate y' m' d'
 
 sortFacts db = db { dbFacts = newFacts }
-  where newFacts = sortBy (\a b -> compare (chronological $ factStudyDate a) (chronological $ factStudyDate b)) $ dbFacts db
-        chronological (StudyDate y m d) = (y, m, d)
+  where newFacts = sortBy (\a b -> compare (chronological (factStudyDate a) (factId a)) (chronological (factStudyDate b) (factId b))) $ dbFacts db
+        chronological (StudyDate y m d) n = (y, m, d, (1.0 :: Double) / (realToFrac n + 1.0))
 
 maxConfidence = 5
 minConfidence = 1
