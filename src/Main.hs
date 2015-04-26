@@ -7,7 +7,7 @@ import System.Directory      (getHomeDirectory)
 import System.IO.Strict      (readFile)
 import Data.Time             (getZonedTime, localDay, zonedTimeToLocalTime, toGregorian, fromGregorian, addDays)
 import Safe                  (readMay)
-import System.IO             (getLine)
+import System.IO             (BufferMode (..), getLine, hSetBuffering, stdout, stdin)
 import Data.List             (sortBy, intercalate)
 import Display               (showColumns)
 
@@ -33,6 +33,8 @@ options = subparser
         )
 
 main = do
+  hSetBuffering stdin  NoBuffering
+  hSetBuffering stdout NoBuffering
   home <- getHomeDirectory
   let dbPath = joinPath [home, ".srs-database"]
   database <- readFile dbPath
@@ -76,11 +78,12 @@ studyFacts _ _ ds [] = putStrLn "There are no facts in your database" >> return 
 studyFacts n today ds (f:fs)
   | factStudyDate f > today = putStrLn "Nothing more for today B)" >> return ((f:fs), ds)
   | otherwise = do
-      putStrLn (factQuestion f)
-      c <- getChar
-      case c of _ -> return ()
-      putStrLn (factAnswer f)
       putStrLn ""
+      putStr (factQuestion f)
+      c <- getLine
+      case c of _ -> return ()
+      putStrLn ""
+      putStrLn (factAnswer f)
       confidence <- getConfidence
       let nextConfidence = incrementConfidence confidence (factConfidence f)
       if nextConfidence == maxConfidence && factConfidence f == maxConfidence
@@ -93,7 +96,8 @@ nextRepitition today n = incDate today (2 ^ n)
 
 getConfidence :: IO Int
 getConfidence = do
-  putStrLn $ "How well did you know that?(" ++ show minConfidence ++ "-" ++ show maxConfidence ++ ")"
+  putStrLn ""
+  putStr $ "How well did you know that?(" ++ show minConfidence ++ "-" ++ show maxConfidence ++ "): "
   c <- getLine
   case readMay c of
    Nothing -> putStrLn (show c ++ " is not a valid confidence level. Please enter an integer between " ++ show minConfidence ++ " and " ++ show maxConfidence) >> getConfidence
