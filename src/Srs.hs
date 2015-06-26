@@ -1,18 +1,15 @@
 module Srs where
 
-import Prelude hiding        (readFile, getLine)
-import System.FilePath.Posix (joinPath)
-import System.Directory      (getHomeDirectory)
-import System.IO             (BufferMode (..), getLine, hSetBuffering, stdout, stdin)
+import Prelude hiding        (getLine)
 import Data.Time             (getZonedTime, localDay, zonedTimeToLocalTime, toGregorian, fromGregorian, addDays)
 import Safe                  (readMay)
 import Data.List             (sortBy, intercalate)
 import Display               (showColumns)
-import System.IO.Strict      (readFile)
 import Control.Applicative   ((<$>), (<*>), pure)
 import Options.Applicative   (Parser(), subparser, command, info, progDesc, argument, metavar, auto, str, helper)
 import Data.Monoid           ((<>))
 import Database              (Database(..), Fact(..), StudyDate(..))
+import System.IO             (getLine)
 
 data SrsCommand = Add    { addConfidence :: Int, addQuestion :: String, addAnswer :: String }
                 | Remove { removeFactId :: Int }
@@ -33,15 +30,9 @@ options = subparser
   <> command "study"  (info (helper <*> studyOptions)  $ progDesc "Study todays facts")
   )
 
-runCommand :: SrsCommand -> IO ()
-runCommand subcommand = do
-  hSetBuffering stdin  NoBuffering
-  hSetBuffering stdout NoBuffering
-  home <- getHomeDirectory
-  let dbPath = joinPath [home, ".srs-database"]
-  database <- readFile dbPath
-  newDb    <- run (read database) subcommand
-  writeFile dbPath $ show $ sortFacts newDb
+runCommand db subcommand = do
+  newDb <- run db subcommand
+  return $ sortFacts newDb
 
 run :: Database -> SrsCommand -> IO Database
 run db List = do
