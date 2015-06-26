@@ -1,5 +1,5 @@
 import Prelude hiding        (readFile, getLine)
-import Options.Applicative   (subparser, command, info, progDesc, argument, metavar, auto, str, execParser, helper, idm)
+import Options.Applicative   (Parser(), subparser, command, info, progDesc, argument, metavar, auto, str, execParser, helper, idm)
 import Control.Applicative   ((<$>), (<*>), pure)
 import Data.Monoid           ((<>))
 import System.FilePath.Posix (joinPath)
@@ -25,12 +25,15 @@ removeOptions = Remove <$> argument auto (metavar "FACTID")
 listOptions   = pure List
 studyOptions  = pure Study
 
-options = subparser
-        (  command "add"    (info addOptions    $ progDesc "Adds a fact to study")
-        <> command "remove" (info removeOptions $ progDesc "Removes a fact from the database")
-        <> command "list"   (info listOptions   $ progDesc "List all facts")
-        <> command "study"  (info studyOptions  $ progDesc "Study todays facts")
-        )
+options = subparser (command "srs" (info (helper <*> srsOptions) $ progDesc "Spaced Repetition Software"))
+
+srsOptions :: Parser Command
+srsOptions = subparser
+  (  command "add"    (info (helper <*> addOptions)    $ progDesc "Adds a fact to study")
+  <> command "remove" (info (helper <*> removeOptions) $ progDesc "Removes a fact from the database")
+  <> command "list"   (info (helper <*> listOptions)   $ progDesc "List all facts")
+  <> command "study"  (info (helper <*> studyOptions)  $ progDesc "Study todays facts")
+  )
 
 main = do
   hSetBuffering stdin  NoBuffering
