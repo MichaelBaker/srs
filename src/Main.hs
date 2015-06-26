@@ -7,19 +7,22 @@ import System.FilePath.Posix (joinPath)
 import System.IO             (BufferMode (..), hSetBuffering, stdout, stdin)
 import System.IO.Strict      (readFile)
 import Safe                  (readMay)
+import Database              (Database(), srs, list, emptyDatabase)
 
 import qualified Srs
-import Database (Database(), srs, emptyDatabase)
+import qualified List
 
 data Command = Command { dbPath :: Maybe String, subCommand :: SubCommand } 
 
-data SubCommand = SrsCommand Srs.SrsCommand
+data SubCommand = SrsCommand  Srs.SrsCommand
+                | ListCommand List.ListCommand
                 | CreateDatabase
                 deriving (Show)
 
 options = Command <$> optional (strOption (long "database" <> short 'd' <> help "An optional path to the database file"))
                   <*> subparser
                     (  command "srs"    (info (helper <*> (SrsCommand <$> Srs.options)) $ progDesc "Spaced Repetition Software")
+                    <> command "list"   (info (helper <*> (ListCommand <$> List.options)) $ progDesc "List tracker")
                     <> command "create" (info (helper <*> (pure CreateDatabase))$ progDesc "Creates an empty zgy database")
                     )
 
@@ -56,5 +59,8 @@ run path c = do
             SrsCommand subcommand -> do
               newSrs <- Srs.run (srs database) subcommand
               return database { srs = newSrs }
-            CreateDatabase        -> return database
+            ListCommand subcommand -> do
+              newList <- List.run (list database) subcommand
+              return database { list = newList }
+            CreateDatabase -> return database
           writeFile path $ show newDb
