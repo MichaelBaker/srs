@@ -11,6 +11,8 @@ import System.IO             (BufferMode (..), getLine, hSetBuffering, stdout, s
 import Data.List             (sortBy, intercalate)
 import Display               (showColumns)
 
+data Command = SrsCommand SrsCommand deriving (Show)
+
 data SrsCommand = Add    { addConfidence :: Int, addQuestion :: String, addAnswer :: String }
                 | Remove { removeFactId :: Int }
                 | Study
@@ -25,7 +27,7 @@ removeOptions = Remove <$> argument auto (metavar "FACTID")
 listOptions   = pure List
 studyOptions  = pure Study
 
-options = subparser (command "srs" (info (helper <*> srsOptions) $ progDesc "Spaced Repetition Software"))
+options = subparser (command "srs" (info (helper <*> (SrsCommand <$> srsOptions)) $ progDesc "Spaced Repetition Software"))
 
 srsOptions :: Parser SrsCommand
 srsOptions = subparser
@@ -36,13 +38,17 @@ srsOptions = subparser
   )
 
 main = do
-  hSetBuffering stdin  NoBuffering
-  hSetBuffering stdout NoBuffering
-  home <- getHomeDirectory
-  let dbPath = joinPath [home, ".srs-database"]
-  database <- readFile dbPath
-  newDb    <- execParser (info (helper <*> options) idm) >>= run (read database)
-  writeFile dbPath $ show $ sortFacts newDb
+  parsedCommand  <- execParser (info (helper <*> options) idm)
+
+  case parsedCommand of
+    SrsCommand subcommand -> do
+      hSetBuffering stdin  NoBuffering
+      hSetBuffering stdout NoBuffering
+      home <- getHomeDirectory
+      let dbPath = joinPath [home, ".srs-database"]
+      database <- readFile dbPath
+      newDb    <- run (read database) subcommand
+      writeFile dbPath $ show $ sortFacts newDb
 
 wordWrap maxLen s = toLines "" (words s)
   where toLines l []     = [l]
