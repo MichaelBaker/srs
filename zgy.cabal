@@ -1,4 +1,4 @@
-name:                srs
+name:                zgy
 version:             0.1.0.0
 license:             MIT
 license-file:        LICENSE
@@ -7,7 +7,7 @@ maintainer:          michaeltbaker@gmail.com
 build-type:          Simple
 cabal-version:       >=1.10
 
-executable srs
+executable zgy
   main-is:             Main.hs
   build-depends:       base >=4.7 && <4.8
                ,       optparse-applicative == 0.11.0.2

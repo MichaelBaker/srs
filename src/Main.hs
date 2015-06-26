@@ -11,7 +11,7 @@ import System.IO             (BufferMode (..), getLine, hSetBuffering, stdout, s
 import Data.List             (sortBy, intercalate)
 import Display               (showColumns)
 
-data Command    = Add    { addConfidence :: Int, addQuestion :: String, addAnswer :: String }
+data SrsCommand = Add    { addConfidence :: Int, addQuestion :: String, addAnswer :: String }
                 | Remove { removeFactId :: Int }
                 | Study
                 | List
@@ -27,7 +27,7 @@ studyOptions  = pure Study
 
 options = subparser (command "srs" (info (helper <*> srsOptions) $ progDesc "Spaced Repetition Software"))
 
-srsOptions :: Parser Command
+srsOptions :: Parser SrsCommand
 srsOptions = subparser
   (  command "add"    (info (helper <*> addOptions)    $ progDesc "Adds a fact to study")
   <> command "remove" (info (helper <*> removeOptions) $ progDesc "Removes a fact from the database")
@@ -50,7 +50,7 @@ wordWrap maxLen s = toLines "" (words s)
                              then l : toLines w ws
                              else toLines (unwords [l, w]) ws
 
-run :: Database -> Command -> IO Database
+run :: Database -> SrsCommand -> IO Database
 run db List = do
   let factData f = ([show (factId f) ++ "  " ++ show (factConfidence f), timeString (factStudyDate f)], ["|Q| " ++ factQuestion f, "|A| " ++ factAnswer f])
       timeString (StudyDate y m d) = concat [show y, "-", show m, "-", show d]
