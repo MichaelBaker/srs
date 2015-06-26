@@ -1,15 +1,16 @@
 module List where
 
-import Control.Applicative ((<$>), (<*>))
 import Data.Monoid         ((<>))
-import Options.Applicative (subparser, auto, command, info, progDesc, argument, metavar, str, helper)
 import Control.Monad       (forM_)
+import Control.Applicative ((<$>), (<*>), pure)
+import Options.Applicative (subparser, auto, command, info, progDesc, argument, metavar, str, helper)
 import ListDatabase        (ListDatabase, List(..), lists, listItems, listName)
 
 data ListCommand = View       { listNameToShow :: String }
                  | Add        { listNameToAdd :: String, listItemToAdd :: String }
                  | CreateList { listNameToAdd :: String }
                  | Complete   { listNameToComplete :: String, index :: Integer }
+                 | Lists
                  deriving (Show)
 
 viewOptions     = View       <$> argument str (metavar "LIST_NAME")
@@ -22,6 +23,7 @@ options = subparser
   <> command "add"      (info (helper <*> addOptions)      $ progDesc "Add an item to a list")
   <> command "create"   (info (helper <*> createOptions)   $ progDesc "Create a list")
   <> command "complete" (info (helper <*> completeOptions) $ progDesc "Complete an item")
+  <> command "lists"    (info (helper <*> pure Lists)      $ progDesc "Show all list names")
   )
 
 run :: ListDatabase -> ListCommand -> IO ListDatabase
@@ -46,6 +48,9 @@ run db (Complete name i) = do
   if listExists
     then return $ completeItem db name i
     else putStrLn ("The list '" ++ name ++ "' does not exist.") >> return db
+run db Lists = do
+  mapM_ putStrLn $ map listName (lists db)
+  return db
 
 addItem name item list = if listName list == name then list { listItems = (listItems list) ++ [item] } else list
 
