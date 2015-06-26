@@ -9,7 +9,7 @@ import System.IO.Strict      (readFile)
 import Safe                  (readMay)
 
 import qualified Srs
-import SrsDatabase (emptyDatabase)
+import Database (Database(), srs, emptyDatabase)
 
 data Command = Command { dbPath :: Maybe String, subCommand :: SubCommand } 
 
@@ -48,11 +48,13 @@ run path c = do
   if not dbExists
     then putStrLn ("No database exists at '" ++ path ++ "'. You can create it with the 'create' subcommand.")
     else do
-      maybeDatabase <- readFile path >>= (return . readMay)
+      maybeDatabase <- readFile path >>= (return . readMay) :: IO(Maybe Database)
       case maybeDatabase of
         Nothing -> putStrLn ("The database at '" ++ path ++ "' is invalid.")
         Just database -> do
           newDb <- case c of
-            SrsCommand subcommand -> Srs.run database subcommand
+            SrsCommand subcommand -> do
+              newSrs <- Srs.run (srs database) subcommand
+              return database { srs = newSrs }
             CreateDatabase        -> return database
           writeFile path $ show newDb
