@@ -8,7 +8,7 @@ import Display               (showColumns)
 import Control.Applicative   ((<$>), (<*>), pure)
 import Options.Applicative   (Parser(), subparser, command, info, progDesc, argument, metavar, auto, str, helper)
 import Data.Monoid           ((<>))
-import Database              (Database(..), Fact(..), StudyDate(..))
+import SrsDatabase           (SrsDatabase(..), Fact(..), StudyDate(..))
 import System.IO             (getLine)
 
 data SrsCommand = Add    { addConfidence :: Int, addQuestion :: String, addAnswer :: String }
@@ -34,7 +34,7 @@ runCommand db subcommand = do
   newDb <- run db subcommand
   return $ sortFacts newDb
 
-run :: Database -> SrsCommand -> IO Database
+run :: SrsDatabase -> SrsCommand -> IO SrsDatabase
 run db List = do
   let factData f = ([show (factId f) ++ "  " ++ show (factConfidence f), timeString (factStudyDate f)], ["|Q| " ++ factQuestion f, "|A| " ++ factAnswer f])
       timeString (StudyDate y m d) = concat [show y, "-", show m, "-", show d]

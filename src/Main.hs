@@ -9,7 +9,7 @@ import System.IO.Strict      (readFile)
 import Safe                  (readMay)
 
 import qualified Srs
-import Database (emptyDatabase)
+import SrsDatabase (emptyDatabase)
 
 data Command = Command { dbPath :: Maybe String, subCommand :: SubCommand } 
 
