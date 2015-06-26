@@ -25,7 +25,7 @@ run :: ListDatabase -> ListCommand -> IO ListDatabase
 run db (View name) = do
   forM_ (lists db) $ \list -> do
     if (listName list) == name
-       then print (listItems list)
+       then printListItems (listItems list)
        else return ()
   return db
 run db (Add name item) = do
@@ -40,3 +40,8 @@ run db (CreateList name) = do
     else return db { lists = List name [] : (lists db) }
 
 addItem name item list = if listName list == name then list { listItems = (listItems list) ++ [item] } else list
+
+printListItems items = mapM_ putStrLn outputLines
+  where outputLines = map (pad padding) $ zip ([0..] :: [Integer]) items
+        padding     = length $ show $ length items
+        pad amount (i, text) = take (amount - (length $ show i)) (repeat ' ') ++ show i ++ "  " ++ text
